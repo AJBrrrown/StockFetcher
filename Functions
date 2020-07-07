@@ -1,0 +1,173 @@
+#functions included: fetch(), stockplotter(), StockComposit, and StockFetcher()
+library(quantmod)
+library(xts)
+library(rvest)
+library(tidyverse)
+library(stringr)
+library(forcats)
+library(lubridate)
+library(plotly)
+library(dplyr)
+library(PerformanceAnalytics)
+
+fetch <- function(X){#put stock symbol in quotations
+sdf<- getSymbols(X, env=NULL, src = "yahoo", from = start, to = end)
+sdf$avg <- (sdf[,2]+sdf[,3])/2
+X_sma_7 <- SMA(sdf[,7],n = 4)#adjust for timeliness
+X_sma_15 <- SMA(sdf[,7],n = 16)#adjust for reference time
+X_sma_32 <- SMA(sdf[,7],n = 32)#adjust for reference time
+day1 <- (as.numeric(sdf$avg[1,]))
+sdf$fluctuation <- (((sdf[,2]-sdf[,3])/sdf[,3])*100)
+sdf$return <-((sdf$avg-day1)/day1)*100
+sdf$long.avg <- (sdf[,7]+X_sma_7+X_sma_15+X_sma_32)/4
+sdf$long.slope <- ((sdf$long.avg-day1)/day1)
+sdf$unpredicted.difference <- (((sdf$avg - sdf$long.avg)/(sdf[,1])))
+sdf$predictives <- ((sdf[,3]-sdf[,10])/sdf[,4])
+return(sdf)
+}
+
+stockplotter <- function(v,V,w,W,x,X,y,Y,z,Z){
+  stock.open <- as.xts(data.frame(v[,1],w[,1],x[,1],y[,1],z[,1]))
+  stock.low <- as.xts(data.frame(v[,3],w[,3],x[,3],y[,3],z[,3]))
+  stock.daily.avg <- as.xts(data.frame(v[,7],w[,7],x[,7],y[,7],z[,7]))
+  colnames(stock.low) <- c(V,W,X,Y,Z)
+  colnames(stock.daily.avg) <- c(V,W,X,Y,Z)
+  stock_return <- as.xts(data.frame(v[,9],w[,9],x[,9],y[,9],z[,9]))
+  colnames(stock_return) <- c(V,W,X,Y,Z)
+  stockflux <-as.xts(data.frame(v[,8],w[,8],x[,8],y[,8],z[,8]))
+  stockflux.V.avg <- mean(stockflux[,1])
+  V.Common.Negative <- (((stockflux.V.avg*nrow(v))-(as.numeric(tail(stock_return[,1],1))))/2)/nrow(v)
+  V.Common.Positive <- (V.Common.Negative*nrow(v)+(as.numeric(tail(stock_return[,1],1))))/nrow(v)
+  stockflux.W.avg <- mean(stockflux[,2])
+  W.Common.Negative <- (((stockflux.W.avg*nrow(w))-(as.numeric(tail(stock_return[,2],1))))/2)/nrow(w)
+  W.Common.Positive <- (W.Common.Negative*nrow(w)+(as.numeric(tail(stock_return[,2],1))))/nrow(w)
+  stockflux.X.avg <- mean(stockflux[,3])
+  X.Common.Negative <- (((stockflux.X.avg*nrow(x))-(as.numeric(tail(stock_return[,3],1))))/2)/nrow(x)
+  X.Common.Positive <- (X.Common.Negative*nrow(x)+(as.numeric(tail(stock_return[,3],1))))/nrow(x)
+  stockflux.Y.avg <- mean(stockflux[,4])
+  Y.Common.Negative <- (((stockflux.Y.avg*nrow(y))-(as.numeric(tail(stock_return[,4],1))))/2)/nrow(y)
+  Y.Common.Positive <- (Y.Common.Negative*nrow(y)+(as.numeric(tail(stock_return[,4],1))))/nrow(y)
+  stockflux.Z.avg <- mean(stockflux[,5])
+  Z.Common.Negative <- (((stockflux.Z.avg*nrow(z))-(as.numeric(tail(stock_return[,5],1))))/2)/nrow(z)
+  Z.Common.Positive <- (Z.Common.Negative*nrow(z)+(as.numeric(tail(stock_return[,5],1))))/nrow(z)
+  stockflux.avg <- data.frame(stockflux.V.avg,stockflux.W.avg,stockflux.X.avg,stockflux.Y.avg,stockflux.Z.avg)
+  colnames(stockflux.avg) <- c(V,W,X,Y,Z)
+  Common.Negative <- data.frame(V.Common.Negative,W.Common.Negative,X.Common.Negative,Y.Common.Negative,Z.Common.Negative)
+  colnames(Common.Negative) <- c(V,W,X,Y,Z)
+  Common.Positive <- data.frame(V.Common.Positive,W.Common.Positive,X.Common.Positive,Y.Common.Positive,Z.Common.Positive)
+  colnames(Common.Positive) <- c(V,W,X,Y,Z)
+  Long.avg <- as.xts(data.frame(v[,10],w[,10],x[,10],y[,10],z[,10]))
+  V.avg.slope <- ((as.numeric(v[32,11])+as.numeric(v[nrow(v),11]))/(nrow(v-32)))*100
+  W.avg.slope <- ((as.numeric(w[32,11])+as.numeric(w[nrow(w),11]))/(nrow(w-32)))*100
+  X.avg.slope <- ((as.numeric(x[32,11])+as.numeric(x[nrow(x),11]))/(nrow(x-32)))*100
+  Y.avg.slope <- ((as.numeric(y[32,11])+as.numeric(y[nrow(y),11]))/(nrow(y-32)))*100
+  Z.avg.slope <- ((as.numeric(z[32,11])+as.numeric(z[nrow(z),11]))/(nrow(z-32)))*100
+  Long.Slope <- data.frame(V.avg.slope,W.avg.slope,X.avg.slope,Y.avg.slope,Z.avg.slope)
+  colnames(Long.Slope) <- c(V,W,X,Y,Z)
+  Percent.Change <- as.xts(data.frame(v[,12],w[,12],x[,12],y[,12],z[,12]))
+  Dollar.change.v <- (sum(v[32:nrow(v),12])/(nrow(v)-32))*v[,1]
+  Dollar.change.w <- (sum(w[32:nrow(w),12])/(nrow(w)-32))*w[,1]
+  Dollar.change.x <- (sum(x[32:nrow(x),12])/(nrow(x)-32))*x[,1]
+  Dollar.change.y <- (sum(y[32:nrow(y),12])/(nrow(y)-32))*y[,1]
+  Dollar.change.z <- (sum(z[32:nrow(z),12])/(nrow(z)-32))*z[,1]
+  Dollar.Change <- as.xts(data.frame(Dollar.change.v,Dollar.change.w,Dollar.change.x,Dollar.change.y,Dollar.change.z))
+  colnames(Dollar.Change) <- c(V,W,X,Y,Z)
+  Predictives <- as.xts(data.frame(v[,13],w[,13],x[,13],y[,13],z[,13]))
+  colnames(Long.avg) <- c(V,W,X,Y,Z)
+  colnames(Predictives) <- c(V,W,X,Y,Z)
+  colnames(Long.Slope) <- c(V,W,X,Y,Z)
+  colnames(Percent.Change) <- c(V,W,X,Y,Z)
+  BB3VValue <- (sum(v[32:nrow(v),13])/(nrow(v)-32))
+  BB3WValue <- (sum(w[32:nrow(w),13])/(nrow(w)-32))
+  BB3XValue <- (sum(x[32:nrow(x),13])/(nrow(x)-32))
+  BB3YValue <- (sum(y[32:nrow(y),13])/(nrow(y)-32))
+  BB3ZValue <- (sum(z[32:nrow(z),13])/(nrow(z)-32))
+  BB3Value <- c((BB3VValue),(BB3WValue),(BB3XValue),(BB3YValue),(BB3ZValue))
+  BB3Value_dollars <- as.numeric(c((BB3VValue*tail(v[,7],1)),(BB3WValue*tail(w[,7],1)),(BB3XValue*tail(x[,7],1)),(BB3YValue*tail(y[,7],1)),(BB3ZValue)*tail(z[,7],1)))
+  Unpred.Dollars <- data.frame(abs(tail(Dollar.Change[,1],1)-BB3Value_dollars[1]),abs(tail(Dollar.Change[,2],1)-BB3Value_dollars[2]),abs(tail(Dollar.Change[,3],1)-BB3Value_dollars[3]),abs(tail(Dollar.Change[,4],1)-BB3Value_dollars[4]),abs(tail(Dollar.Change[,5],1)-BB3Value_dollars[5]))
+  SuperPositionPercent <- as.xts(data.frame((v[,13]-BB3VValue)*100,(w[,13]-BB3WValue)*100,(x[,13]-BB3XValue)*100,(y[,13]-BB3YValue)*100,(z[,13]-BB3ZValue)*100))
+  colnames(SuperPositionPercent) <- c(V,W,X,Y,Z)
+  Volatility <- data.frame(abs(SuperPositionPercent[,1]/(BB3Value[1]*100)),abs(SuperPositionPercent[,2]/(BB3Value[2]*100)),abs(SuperPositionPercent[,3]/(BB3Value[3]*100)),abs(SuperPositionPercent[,4]/(BB3Value[4]*100)),abs(SuperPositionPercent[,5]/(BB3Value[5]*100)))
+  Ratio <- tail(Volatility,1)*100
+  colnames(Ratio) <- c(V,W,X,Y,Z)
+  SuperDollarsV <- abs(tail(SuperPositionPercent,1)[,1]/100)*tail(stock.low[,1],1)
+  SuperDollarsW <- abs(tail(SuperPositionPercent,1)[,2]/100)*tail(stock.low[,2],1)
+  SuperDollarsX <- abs(tail(SuperPositionPercent,1)[,3]/100)*tail(stock.low[,3],1)
+  SuperDollarsY <- abs(tail(SuperPositionPercent,1)[,4]/100)*tail(stock.low[,4],1)
+  SuperDollarsZ <- abs(tail(SuperPositionPercent,1)[,5]/100)*tail(stock.low[,5],1)
+  SuperDollars <- data.frame(SuperDollarsV,SuperDollarsW,SuperDollarsX,SuperDollarsY,SuperDollarsZ)
+  entry.point.v <- as.numeric((tail(v[,10],1)*(1+(V.avg.slope/100))-abs(Dollar.change.v)-abs(BB3Value_dollars[1])-SuperDollars[,1]))
+  entry.point.w <- as.numeric((tail(w[,10],1)*(1+(W.avg.slope/100))-abs(Dollar.change.w)-abs(BB3Value_dollars[2])-SuperDollars[,2]))
+  entry.point.x <- as.numeric((tail(x[,10],1)*(1+(X.avg.slope/100))-abs(Dollar.change.x)-abs(BB3Value_dollars[3])-SuperDollars[,3]))
+  entry.point.y <- as.numeric((tail(y[,10],1)*(1+(Y.avg.slope/100))-abs(Dollar.change.y)-abs(BB3Value_dollars[4])-SuperDollars[,4]))
+  entry.point.z <- as.numeric((tail(z[,10],1)*(1+(Z.avg.slope/100))-abs(Dollar.change.z)-abs(BB3Value_dollars[5])-SuperDollars[,5]))
+  Bear.point <- c(entry.point.v,entry.point.w,entry.point.x,entry.point.y,entry.point.z)
+  exit.point.v <- as.numeric((tail(v[,10],1)*(1+(V.avg.slope/100))+abs(Dollar.change.v)+abs(BB3Value_dollars[1])+SuperDollars[,1]))
+  exit.point.w <- as.numeric((tail(w[,10],1)*(1+(W.avg.slope/100))+abs(Dollar.change.w)+abs(BB3Value_dollars[2])+SuperDollars[,2]))
+  exit.point.x <- as.numeric((tail(x[,10],1)*(1+(X.avg.slope/100))+abs(Dollar.change.x)+abs(BB3Value_dollars[3])+SuperDollars[,3]))
+  exit.point.y <- as.numeric((tail(y[,10],1)*(1+(Y.avg.slope/100))+abs(Dollar.change.y)+abs(BB3Value_dollars[4])+SuperDollars[,4]))
+  exit.point.z <- as.numeric((tail(z[,10],1)*(1+(Z.avg.slope/100))+abs(Dollar.change.z)+abs(BB3Value_dollars[5])+SuperDollars[,5]))
+  Bull.point <- c(exit.point.v,exit.point.w,exit.point.x,exit.point.y,exit.point.z)
+  
+ # Bull.v.bear.plot2 <- function(){plot(as.zoo(Long.Slope), screens = 1, lty = 1:5, main = "Slope", xlab = "Date", ylab = "Degree Of Total Change")
+    #stocklegend <- legend("topleft", c(V,W,X,Y,Z), lty = 1:5, cex = 0.5)
+  #  abline(h=0)
+  #  abline(v=as.Date("2020-03-18"))}
+  Bull.v.bear.plot3 <- function(){plot(as.zoo(Predictives), screens = 1, lty = 1:5, main = "Predicted Change", xlab = "Date", ylab = "Percent")
+    stocklegend <- legend("topleft", c(V,W,X,Y,Z), lty = 1:5, cex = 0.5)
+    abline(h=0)
+    abline(v=as.Date("2020-03-18"))}
+  Bull.v.bear.plot4 <- function(){plot(as.zoo(Volatility), screens = 1, lty = 1:5, main = "Volatility SuperPosition", xlab = "Date", ylab = "% Below(-) or Above(+) Trend")
+    stocklegend <- legend("topleft", c(V,W,X,Y,Z), lty = 1:5, cex = 0.5)
+    abline(h=0)
+    abline(v=as.Date("2020-03-18"))}
+  return.plot <- function(){plot(as.zoo(stock_return), screens = 1, lty = 1:5, main = "Return Since Start", xlab = "Date", ylab = "Return")
+   stocklegend <- legend("topleft", c(V,W,X,Y,Z), lty = 1:5, cex = 0.5)
+    abline(h=1)}
+  stock.plot <- function(){plot(as.zoo(stock.daily.avg), screens = 1, lty = 1:5, main = "Daily Average Price", xlab = "Date", ylab = "Price")
+   stocklegend <- legend("topleft", c(V,W,X,Y,Z), lty = 1:5, cex = 0.5)
+    abline(v=as.Date("2020-03-18"))}
+  stocklist <- list(stock.plot(),return.plot(),Bull.v.bear.plot3(), Bull.v.bear.plot4(),
+                    "Bear Point"= Bear.point,"Long Average Price"=tail(Long.avg,3), "Bull Point"= Bull.point,
+                    "Average Degree of Slope"=Long.Slope,"Current Trend"=BB3Value_dollars,
+                    "SuperDollars"= SuperDollars,"Average Percentage Fluctuation"=stockflux.avg,
+                    "Volatility"= Ratio,"Common Loss %"=Common.Negative,"Common Gain %"=Common.Positive)
+  return(stocklist)
+}
+
+
+StockFetcher <- function(a,b,c,d,e){#all symbols must be in quotes
+  library(quantmod)
+  library(tidyr)
+  end <- Sys.Date()
+  A <- fetch(a)
+  B <- fetch(b)
+  C <- fetch(c)
+  D <- fetch(d)
+  E <- fetch(e)
+  stockplotter(A,a,B,b,C,c,D,d,E,e)
+}
+
+
+#((A$A[,5]^(1+A[,9]))-(A$A[,5]^(1-A[,9]))): this formula indicates number of buys per day
+
+StockComposit <- function(a){
+  stock <- fetch(a)
+  stock.close <- stock[,4]
+  stock.low <- stock[,3]
+  stock.long.avg <- stock[,10]
+  Dollar.change <- as.numeric(sum(stock[32:nrow(stock),12])/(nrow(stock)-32))*tail(stock[,1],1)
+  BB3Value <- as.numeric(sum(stock[32:nrow(stock),13])/(nrow(stock)-32))
+  BB3Value_dollars <- BB3Value*tail(stock[,7],1)
+  SuperPositionPercent <- (stock[,13]-BB3Value)*100
+  Stock.slope <- ((as.numeric(stock[32,11])+as.numeric(stock[nrow(stock),11]))/(nrow(stock-32)))*100
+  SuperDollars <- abs(tail(SuperPositionPercent,1)[,1]/100)*tail(stock.low[,1],1)
+  bear.line <- ((stock.long.avg-abs(as.numeric(Dollar.change))-abs(as.numeric(BB3Value_dollars))-as.numeric(SuperDollars)))
+  bull.line <- ((stock.long.avg+abs(as.numeric(Dollar.change))+abs(as.numeric(BB3Value_dollars))+as.numeric(SuperDollars)))
+  stock.parameters <- data.frame(stock.close,stock.long.avg,bear.line,bull.line)
+  stock.plot <- function(){plot(as.zoo(stock.parameters), screens = 1, lty = 1:4, main = a, xlab = "Date", ylab = "Price")
+    stocklegend <- legend("topleft", c("close","avg","bear","bull"), lty = 1:4, cex = 0.5)
+    abline(v=as.Date("2020-03-18"))}
+  stocklist <- list(stock.plot(), "End-Of-Day Average Price"=as.numeric(tail(stock.long.avg,3)), "Target Price"=as.numeric(tail(stock.long.avg,1))*(1+(Stock.slope/100)))
+  return(stocklist)
+}
