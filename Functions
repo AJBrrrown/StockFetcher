@@ -1,4 +1,5 @@
 #functions included: fetch(), stockplotter(), StockComposit, and StockFetcher()
+#when using stock tickers (FINRA), make sure tickers are in quotes ("")
 library(quantmod)
 library(xts)
 library(rvest)
