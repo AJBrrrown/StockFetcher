@@ -1,5 +1,4 @@
-#functions included: fetch(), stockplotter(), StockComposit, and StockFetcher()
-#when using stock tickers (FINRA), make sure tickers are in quotes ("")
+#functions included: fetch(), stockplotter(), and StockFetcher()
 library(quantmod)
 library(xts)
 library(rvest)
@@ -11,6 +10,10 @@ library(plotly)
 library(dplyr)
 library(PerformanceAnalytics)
 
+#this is the basic function that 'fetches' a stock ticker
+#'start' indicates a start date to fetch number from
+#'end' is the end date, generally Sys.Date()
+#the format for setting a date is -> as.Date("YYYY-MM-DD")
 fetch <- function(X){#put stock symbol in quotations
 sdf<- getSymbols(X, env=NULL, src = "yahoo", from = start, to = end)
 sdf$avg <- (sdf[,2]+sdf[,3])/2
@@ -23,10 +26,17 @@ sdf$return <-((sdf$avg-day1)/day1)*100
 sdf$long.avg <- (sdf[,7]+X_sma_7+X_sma_15+X_sma_32)/4
 sdf$long.slope <- ((sdf$long.avg-day1)/day1)
 sdf$unpredicted.difference <- (((sdf$avg - sdf$long.avg)/(sdf[,1])))
-sdf$predictives <- ((sdf[,3]-sdf[,10])/sdf[,4])
+sdf$predictives <- (((sdf[,3]-sdf[,10])/sdf[,4])/mean(sdf$fluctuation))
 return(sdf)
 }
 
+#this is the bulk function
+#this identifies a multitude of metrics for 5 stocks
+#Superdollars correspond to expected errors in daily highs or lows
+#volatility shows when tickers are acting unpredictably
+#Bull/Bear Market plot shows every ticker's position on an imaginary bull market or bear market metric
+#common loss and common gain are calculated from a ticker's average fluctuation
+#current trend identifies the total area under or above the slope. Generally, this will regress to 0 at some point
 stockplotter <- function(v,V,w,W,x,X,y,Y,z,Z){
   stock.open <- as.xts(data.frame(v[,1],w[,1],x[,1],y[,1],z[,1]))
   stock.low <- as.xts(data.frame(v[,3],w[,3],x[,3],y[,3],z[,3]))
@@ -114,11 +124,14 @@ stockplotter <- function(v,V,w,W,x,X,y,Y,z,Z){
     #stocklegend <- legend("topleft", c(V,W,X,Y,Z), lty = 1:5, cex = 0.5)
   #  abline(h=0)
   #  abline(v=as.Date("2020-03-18"))}
-  Bull.v.bear.plot3 <- function(){plot(as.zoo(Predictives), screens = 1, lty = 1:5, main = "Predicted Change", xlab = "Date", ylab = "Percent")
+  #this particular plot is not being used, because it is dumb
+  Bull.v.bear.plot3 <- function(){plot(as.zoo(Predictives), screens = 1, lty = 1:5, main = "Bull or Bear Market", xlab = "Date", ylab = "- = Buy, + = Sell")
     stocklegend <- legend("topleft", c(V,W,X,Y,Z), lty = 1:5, cex = 0.5)
     abline(h=0)
+    abline(h=0.01)
+    abline(h=-0.01)
     abline(v=as.Date("2020-03-18"))}
-  Bull.v.bear.plot4 <- function(){plot(as.zoo(Volatility), screens = 1, lty = 1:5, main = "Volatility SuperPosition", xlab = "Date", ylab = "% Below(-) or Above(+) Trend")
+  Volatility.plot4 <- function(){plot(as.zoo(Volatility), screens = 1, lty = 1:5, main = "Volatility SuperPosition", xlab = "Date", ylab = "Volatility")
     stocklegend <- legend("topleft", c(V,W,X,Y,Z), lty = 1:5, cex = 0.5)
     abline(h=0)
     abline(v=as.Date("2020-03-18"))}
@@ -128,19 +141,17 @@ stockplotter <- function(v,V,w,W,x,X,y,Y,z,Z){
   stock.plot <- function(){plot(as.zoo(stock.daily.avg), screens = 1, lty = 1:5, main = "Daily Average Price", xlab = "Date", ylab = "Price")
    stocklegend <- legend("topleft", c(V,W,X,Y,Z), lty = 1:5, cex = 0.5)
     abline(v=as.Date("2020-03-18"))}
-  stocklist <- list(stock.plot(),return.plot(),Bull.v.bear.plot3(), Bull.v.bear.plot4(),
-                    "Bear Point"= Bear.point,"Long Average Price"=tail(Long.avg,3), "Bull Point"= Bull.point,
+  stocklist <- list(stock.plot(),return.plot(),Bull.v.bear.plot3(), Volatility.plot4(),
                     "Average Degree of Slope"=Long.Slope,"Current Trend"=BB3Value_dollars,
                     "SuperDollars"= SuperDollars,"Average Percentage Fluctuation"=stockflux.avg,
                     "Volatility"= Ratio,"Common Loss %"=Common.Negative,"Common Gain %"=Common.Positive)
   return(stocklist)
 }
 
-
+#This is the compilation of fetch and stockplotter for 5 stocks
 StockFetcher <- function(a,b,c,d,e){#all symbols must be in quotes
   library(quantmod)
   library(tidyr)
-  end <- Sys.Date()
   A <- fetch(a)
   B <- fetch(b)
   C <- fetch(c)
@@ -151,7 +162,14 @@ StockFetcher <- function(a,b,c,d,e){#all symbols must be in quotes
 
 
 #((A$A[,5]^(1+A[,9]))-(A$A[,5]^(1-A[,9]))): this formula indicates number of buys per day
+#I don't know how to use it just yet
 
+#StockComposit allows individual tickers to be examined for specific buy and sell prices.
+#also shows if the stock is in a bear or bull market (this is slopeless). 
+#buy low, sell high, obviously.
+#Bull/Bear market plot is in relation to the long average
+#target price is a predicted value based on long average and slope
+#the earlier the start date, the more accurate the measurements
 StockComposit <- function(a){
   stock <- fetch(a)
   stock.close <- stock[,4]
@@ -160,6 +178,7 @@ StockComposit <- function(a){
   Dollar.change <- as.numeric(sum(stock[32:nrow(stock),12])/(nrow(stock)-32))*tail(stock[,1],1)
   BB3Value <- as.numeric(sum(stock[32:nrow(stock),13])/(nrow(stock)-32))
   BB3Value_dollars <- BB3Value*tail(stock[,7],1)
+  Predictives <- stock[,13]
   SuperPositionPercent <- (stock[,13]-BB3Value)*100
   Stock.slope <- ((as.numeric(stock[32,11])+as.numeric(stock[nrow(stock),11]))/(nrow(stock-32)))*100
   SuperDollars <- abs(tail(SuperPositionPercent,1)[,1]/100)*tail(stock.low[,1],1)
@@ -169,6 +188,16 @@ StockComposit <- function(a){
   stock.plot <- function(){plot(as.zoo(stock.parameters), screens = 1, lty = 1:4, main = a, xlab = "Date", ylab = "Price")
     stocklegend <- legend("topleft", c("close","avg","bear","bull"), lty = 1:4, cex = 0.5)
     abline(v=as.Date("2020-03-18"))}
-  stocklist <- list(stock.plot(), "End-Of-Day Average Price"=as.numeric(tail(stock.long.avg,3)), "Target Price"=as.numeric(tail(stock.long.avg,1))*(1+(Stock.slope/100)))
+  Bull.v.bear.plot3 <- function(){plot(as.zoo(Predictives), screens = 1, lty = 1:5, main = "Bull or Bear Market", xlab = "Date", ylab = "- = Buy, + = Sell")
+    abline(h=0)
+    abline(h=0.01)
+    abline(h=-0.01)
+    abline(v=as.Date("2020-03-18"))}
+  stocklist <- list(stock.plot(), Bull.v.bear.plot3(), "End-Of-Day Average Price"=as.numeric(tail(stock.long.avg,3)), "Target Price"=as.numeric(tail(stock.long.avg,1))*(1+(Stock.slope/100)),
+                    "Bear point (buy)" = as.numeric(tail(bear.line,1)),"Bull Point (sell)"= as.numeric(tail(bull.line,1)), "Percent Error of Long Average Predicting Low" = mean(stock[,13],na.rm=TRUE))
   return(stocklist)
 }
+
+start <- COVID
+end <- Sys.Date()
+StockFetcher("SPY","SPY","SPY","SPY","SPY")
