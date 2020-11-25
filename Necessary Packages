@@ -1,0 +1,11 @@
+#only needs to be run once, but this provides all the tools that are used by the Stockfetcher-class functions
+install.packages('quantmod')
+install.packages('xts')
+install.packages('rvest')
+install.packages('tidyverse')
+install.packages('stringr')
+install.packages('forcats')
+install.packages('lubridate')
+install.packages('plotly')
+install.packages('dplyr')
+install.packages('PerformanceAnalytics')
